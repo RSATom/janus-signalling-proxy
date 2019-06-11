@@ -7,11 +7,15 @@
 #include <set>
 #include <map>
 
+#include <glib.h>
+
 #include <libwebsockets.h>
 #include <jansson.h>
 
 #include <CxxPtr/libwebsocketsPtr.h>
 #include <CxxPtr/JanssonPtr.h>
+#include <CxxPtr/OpenSSLPtr.h>
+#include <CxxPtr/GlibPtr.h>
 
 #include "MessageBuffer.h"
 #include "Base62.h"
@@ -27,7 +31,7 @@ enum {
 enum {
     CLIENT_PROTOCOL_ID,
     SECURE_CLIENT_PROTOCOL_ID,
-    SERVICE_PROTOCOL_ID,
+    HTTPS_PROTOCOL_ID,
     SECURE_SERVICE_PROTOCOL_ID,
 };
 
@@ -41,6 +45,8 @@ typedef std::map<std::string, SenderTransaction> Transactions;
 
 struct ContextData
 {
+    X509_STOREPtr allowedService;
+
     lws* service;
     std::set<lws*> clients;
 
@@ -70,27 +76,10 @@ struct SessionContextData
     SessionData* data;
 };
 
-static int HTTPCallback(
-    lws* wsi,
-    lws_callback_reasons reason,
-    void* /*user*/,
-    void* /*in*/, size_t /*len*/)
-{
-    switch(reason) {
-        case LWS_CALLBACK_HTTP:
-            lws_return_http_status(wsi, 418, nullptr);
-            return -1;
-        default:
-            break;
-    }
-
-    return 0;
-}
-
 static bool IsServiceConnection(lws* wsi)
 {
     const lws_protocols* protocol = lws_get_protocol(wsi);
-    return SERVICE_PROTOCOL_ID == protocol->id;
+    return SECURE_SERVICE_PROTOCOL_ID == protocol->id;
 }
 
 static std::string&& ExtractJanus(const JsonPtr& jsonMessagePtr)
@@ -276,7 +265,7 @@ static bool RouteMessageToClient(lws* wsi, MessageBuffer* message)
         if(!clientSessionData->createSessionTransaction.empty()) {
             if(clientSessionData->createSessionTransaction == clientTransaction.transaction) {
                 json_int_t newSessionId = ExtractNewSessionId(jsonMessagePtr);
-                lwsl_notice("Client session id received: %I64u\n, ", newSessionId);
+                lwsl_notice("Client session id received: %llu\n, ", newSessionId);
                 clientSessionData->createSessionTransaction.clear();
                 clientSessionData->sessionId = newSessionId;
 
@@ -335,6 +324,133 @@ static bool RouteMessage(lws* wsi, MessageBuffer* message)
         return RouteMessageToService(wsi, message);
 }
 
+static bool LoadServiceCertificate(
+    const std::string& serviceCertificatePath,
+    ContextData* contextData)
+{
+    if(serviceCertificatePath.empty() || !contextData)
+        return false;
+
+    enum {
+        CERTIFICATE_MIN_SIZE =
+            sizeof("-----BEGIN CERTIFICATE-----\n"
+                   "-----END CERTIFICATE-----\n"),
+        CERTIFICATE_MAX_SIZE = 4096,
+    };
+
+    gchar* certificate;
+    gsize certLength;
+    if(!g_file_get_contents(serviceCertificatePath.c_str(), &certificate, &certLength, nullptr)) {
+        lwsl_err("Fail load service certificate\n");
+        return false;
+    }
+
+    if(certLength < CERTIFICATE_MIN_SIZE || certLength > CERTIFICATE_MAX_SIZE) {
+        lwsl_err("Invalid service certificate size\n");
+        return false;
+    }
+
+    contextData->allowedService.reset(X509_STORE_new());
+    X509_STORE* allowedService = contextData->allowedService.get();
+    if(!allowedService) {
+        lwsl_err("X509_STORE_new failed\n");
+        return false;
+    }
+
+    BIOPtr certBioPtr(BIO_new(BIO_s_mem()));
+    BIO* certBio = certBioPtr.get();
+    if(!certBio) {
+        lwsl_err("BIO_new failed\n");
+        return false;
+    }
+
+    if(BIO_write(
+        certBio,
+        certificate,
+        static_cast<int>(certLength)) <= 0)
+    {
+        lwsl_err("BIO_write failed\n");
+        return false;
+    }
+
+    X509Ptr certPtr(PEM_read_bio_X509(certBio, nullptr, nullptr, nullptr));
+    X509* allowedCert = certPtr.get();
+    if(!allowedCert) {
+        lwsl_err("Failed parse service certificate\n");
+        return false;
+    }
+
+    if(!X509_STORE_add_cert(allowedService, allowedCert)) {
+        lwsl_err("X509_STORE_add_cert failed\n");
+        return false;
+    }
+
+    return true;
+}
+
+static bool AuthenticateService(X509* cert, ContextData* cd)
+{
+    if(!cert || !cd)
+        return false;
+
+    X509_STORE* allowedService = cd->allowedService.get();
+    if(!allowedService)
+        return false;
+
+    X509_STORE_CTXPtr ctxPtr(X509_STORE_CTX_new());
+    X509_STORE_CTX* ctx = ctxPtr.get();
+    if(!ctx) {
+        lwsl_err("X509_STORE_CTX_new failed\n");
+        return false;
+    }
+
+    if(!X509_STORE_CTX_init(ctx, allowedService, cert, nullptr))
+        return false;
+
+    if(!X509_verify_cert(ctx)) {
+        lwsl_err("Service certificate is NOT allowed");
+        return false;
+    }
+
+    return true;
+}
+
+static int HTTPCallback(
+    lws* wsi,
+    lws_callback_reasons reason,
+    void* user,
+    void* /*in*/, size_t /*len*/)
+{
+    lws_context* context = lws_get_context(wsi);
+    ContextData* cd = static_cast<ContextData*>(lws_context_user(context));
+
+    switch(reason) {
+        case LWS_CALLBACK_HTTP:
+            lws_return_http_status(wsi, 418, nullptr);
+            return -1;
+        case LWS_CALLBACK_OPENSSL_PERFORM_CLIENT_CERT_VERIFICATION: {
+            X509_STORE_CTX* x509_ctx = static_cast<X509_STORE_CTX*>(user);
+            if(!x509_ctx) {
+                lwsl_err("Missing x509_ctx\n");
+                return -1;
+            }
+
+            X509* cert =
+                X509_STORE_CTX_get_current_cert(x509_ctx);
+            if(!AuthenticateService(cert, cd)) {
+                lwsl_err("X509_STORE_CTX_get_current_cert failed\n");
+                return -1;
+            }
+
+            break;
+        }
+        default:
+            break;
+    }
+
+    return 0;
+}
+
 static int WsCallback(
     lws* wsi,
     lws_callback_reasons reason,
@@ -350,8 +466,21 @@ static int WsCallback(
         case LWS_CALLBACK_PROTOCOL_INIT:
             lwsl_notice("LWS_CALLBACK_PROTOCOL_INIT\n");
             break;
-        case LWS_CALLBACK_ESTABLISHED:
+        case LWS_CALLBACK_ESTABLISHED: {
             lwsl_notice("LWS_CALLBACK_ESTABLISHED\n");
+
+            if(serviceConnection) {
+                SSL* ssl = static_cast<SSL*>(in);
+                if(!ssl)
+                    return -1;
+
+                X509* cert = SSL_get_peer_certificate(ssl);
+                if(!cert)
+                    return -1;
+
+                if(!AuthenticateService(cert, cd))
+                    return -1;
+            }
 
             assert(!sd->data);
 
@@ -391,6 +520,7 @@ static int WsCallback(
             }
 
             break;
+        }
         case LWS_CALLBACK_RECEIVE:
             lwsl_notice("LWS_CALLBACK_RECEIVE\n");
 
@@ -400,7 +530,7 @@ static int WsCallback(
             }
 
             if(sd->data->incomingMessage.onReceive(wsi, in, len)) {
-                lwsl_notice("%.*s\n", sd->data->incomingMessage.size(), sd->data->incomingMessage.data());
+                lwsl_notice("%.*s\n", static_cast<int>(sd->data->incomingMessage.size()), sd->data->incomingMessage.data());
                 if(!RouteMessage(wsi, &(sd->data->incomingMessage))) {
                     if(serviceConnection)
                         lwsl_err("fail route message client\n");
@@ -466,6 +596,30 @@ static int WsCallback(
     return 0;
 }
 
+static std::string ConfigDir()
+{
+    const gchar* configDir = g_get_user_config_dir();
+    if(!configDir) {
+        return std::string();
+    }
+
+    return configDir;
+}
+
+static std::string FullPath(const std::string& configDir, const std::string& path)
+{
+    std::string fullPath;
+    if(!g_path_is_absolute(path.c_str())) {
+        gchar* tmpPath =
+            g_build_filename(configDir.c_str(), path.c_str(), NULL);
+        fullPath = tmpPath;
+        g_free(tmpPath);
+    } else
+        fullPath = path;
+
+    return fullPath;
+}
+
 void Proxy()
 {
     const lws_protocols protocols[] = {
@@ -478,19 +632,11 @@ void Proxy()
             CLIENT_PROTOCOL_ID,
             nullptr
         },
-        {
-            "janus-client-protocol",
-            WsCallback,
-            sizeof(SessionContextData),
-            RX_BUFFER_SIZE,
-            SERVICE_PROTOCOL_ID,
-            nullptr
-        },
         { nullptr, nullptr, 0, 0 } /* terminator */
     };
 
     const lws_protocols secureProtocols[] = {
-        { "http", HTTPCallback, 0, 0 },
+        { "http", HTTPCallback, 0, 0, HTTPS_PROTOCOL_ID },
         {
             "janus-protocol",
             WsCallback,
@@ -510,8 +656,25 @@ void Proxy()
         { nullptr, nullptr, 0, 0 } /* terminator */
     };
 
+    const std::string configDir = ::ConfigDir();
+    if(configDir.empty())
+        return;
+
+    const std::string certificatePath =
+        FullPath(configDir, "janus-signalling-proxy.certificate");
+    const std::string privateKeyPath =
+        FullPath(configDir, "janus-signalling-proxy.key");
+    if(certificatePath.empty() || privateKeyPath.empty())
+        return;
+
+    const std::string serviceCertificatePath =
+        FullPath(configDir, "janus-signalling-service.certificate");
+
     ContextData contextData {};
     contextData.serviceTransactionCounter = 1;
+
+    if(!LoadServiceCertificate(serviceCertificatePath, &contextData))
+        return;
 
     lws_context_creation_info wsInfo {};
     wsInfo.options = LWS_SERVER_OPTION_EXPLICIT_VHOSTS;
@@ -533,8 +696,12 @@ void Proxy()
     lws_context_creation_info secureVhostInfo {};
     secureVhostInfo.port = DEFAULT_SECURE_PORT;
     secureVhostInfo.protocols = secureProtocols;
-    vhostInfo.options |= LWS_SERVER_OPTION_DO_SSL_GLOBAL_INIT;
-    vhostInfo.options |= LWS_SERVER_OPTION_REQUIRE_VALID_OPENSSL_CLIENT_CERT;
+    secureVhostInfo.ssl_cert_filepath = certificatePath.c_str();
+    secureVhostInfo.ssl_private_key_filepath = privateKeyPath.c_str();
+    secureVhostInfo.options |= LWS_SERVER_OPTION_DO_SSL_GLOBAL_INIT;
+    // secureVhostInfo.options |= LWS_SERVER_OPTION_REDIRECT_HTTP_TO_HTTPS;
+    secureVhostInfo.options |= LWS_SERVER_OPTION_REQUIRE_VALID_OPENSSL_CLIENT_CERT;
+    secureVhostInfo.options |= LWS_SERVER_OPTION_PEER_CERT_NOT_REQUIRED;
 
     lws_vhost* secureVhost = lws_create_vhost(context, &secureVhostInfo);
     if(!secureVhost)
