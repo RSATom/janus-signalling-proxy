@@ -464,11 +464,8 @@ static int WsCallback(
 
     switch (reason) {
         case LWS_CALLBACK_PROTOCOL_INIT:
-            lwsl_notice("LWS_CALLBACK_PROTOCOL_INIT\n");
             break;
         case LWS_CALLBACK_ESTABLISHED: {
-            lwsl_notice("LWS_CALLBACK_ESTABLISHED\n");
-
             if(serviceConnection) {
                 SSL* ssl = static_cast<SSL*>(in);
                 if(!ssl)
@@ -522,8 +519,6 @@ static int WsCallback(
             break;
         }
         case LWS_CALLBACK_RECEIVE:
-            lwsl_notice("LWS_CALLBACK_RECEIVE\n");
-
             if(!serviceConnection && !cd->service) { // service disconnected
                 lwsl_err("no service connection\n");
                 return -1;
@@ -545,8 +540,6 @@ static int WsCallback(
 
             break;
         case LWS_CALLBACK_SERVER_WRITEABLE:
-            lwsl_notice("LWS_CALLBACK_SERVER_WRITEABLE\n");
-
             if(!serviceConnection && !cd->service) { // service disconnected
                 lwsl_err("no service connection\n");
                 return -1;
@@ -567,8 +560,6 @@ static int WsCallback(
 
             break;
         case LWS_CALLBACK_CLOSED:
-            lwsl_notice("LWS_CALLBACK_CLOSED\n");
-
             if(serviceConnection) {
                 cd->service = nullptr;
                 cd->transactions.clear();
@@ -577,12 +568,15 @@ static int WsCallback(
                 // client will disconnect when will know about service disconnect on wakeup
                 for(lws* wsi: cd->clients)
                     lws_callback_on_writable(wsi);
+
+                lwsl_notice("Service disconnected");
             } else {
                 ClientSessionData* clientSessionData =
                     static_cast<ClientSessionData*>(sd->data);
                 OnClientSessionEnd(cd, clientSessionData);
 
                 cd->clients.erase(wsi);
+                lwsl_notice("Client disconnected");
             }
 
             delete sd->data;
