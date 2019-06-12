@@ -8,7 +8,6 @@
 #include <map>
 
 #include <glib.h>
-
 #include <libwebsockets.h>
 #include <jansson.h>
 
@@ -640,7 +639,7 @@ void Proxy()
             nullptr
         },
         {
-            "janus-client-protocol",
+            "janus-agent-protocol",
             WsCallback,
             sizeof(SessionContextData),
             RX_BUFFER_SIZE,
@@ -662,7 +661,7 @@ void Proxy()
         return;
 
     const std::string serviceCertificatePath =
-        FullPath(configDir, "janus-signalling-service.certificate");
+        FullPath(configDir, "janus-signalling-agent.certificate");
 
     ContextData contextData {};
     contextData.serviceTransactionCounter = 1;
