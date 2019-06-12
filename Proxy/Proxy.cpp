@@ -17,8 +17,8 @@
 #include <CxxPtr/OpenSSLPtr.h>
 #include <CxxPtr/GlibPtr.h>
 
-#include "MessageBuffer.h"
-#include "Base62.h"
+#include "Common/MessageBuffer.h"
+#include "Common/Base62.h"
 
 
 enum {

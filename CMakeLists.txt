@@ -18,5 +18,6 @@ include_directories(
     )
 
 add_subdirectory(deps/CxxPtr)
+add_subdirectory(Common)
 add_subdirectory(Proxy)
 add_subdirectory(Test)

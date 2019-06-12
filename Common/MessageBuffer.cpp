@@ -2,6 +2,7 @@
 
 #include <cassert>
 
+
 MessageBuffer::MessageBuffer()
 {
 }
