@@ -10,11 +10,11 @@
 #include "Common/MessageBuffer.h"
 #include "Common/ConfigHelpers.h"
 
+#include "AgentConfig.h"
+
 
 enum {
     RX_BUFFER_SIZE = 512,
-    SERVICE_PORT = 8189,
-    SECURE_PROXY_PORT = 8989,
     RECONNECT_TIMEOUT = 5,
 };
 
@@ -31,13 +31,7 @@ enum {
 
 struct ContextData
 {
-    std::string serviceHost;
-    unsigned short servicePort;
-    std::string servicePath;
-
-    std::string proxyHost;
-    unsigned short proxyPort;
-    std::string proxyPath;
+    AgentConfig config;
 
     lws* serviceConnection;
     lws* proxyConnection;
@@ -69,22 +63,22 @@ static void ServiceConnect(struct lws_context* context)
     if(cd->serviceConnection)
         return;
 
-    if(cd->serviceHost.empty() || !cd->servicePort || cd->servicePath.empty()) {
+    if(cd->config.serviceHost.empty() || !cd->config.servicePort) {
         lwsl_err("Missing required connect parameter.\n");
         return;
     }
 
-    char host_and_port[cd->serviceHost.size() + 1 + 5 + 1];
+    char host_and_port[cd->config.serviceHost.size() + 1 + 5 + 1];
     snprintf(host_and_port, sizeof(host_and_port), "%s:%u",
-        cd->serviceHost.c_str(), cd->servicePort);
+        cd->config.serviceHost.c_str(), cd->config.servicePort);
 
     lwsl_notice("Connecting to service %s... \n", host_and_port);
 
     struct lws_client_connect_info connectInfo = {};
     connectInfo.context = context;
-    connectInfo.address = cd->serviceHost.c_str();
-    connectInfo.port = cd->servicePort;
-    connectInfo.path = cd->servicePath.c_str();
+    connectInfo.address = cd->config.serviceHost.c_str();
+    connectInfo.port = cd->config.servicePort;
+    connectInfo.path = "/";
     connectInfo.protocol = "janus-protocol";
     connectInfo.host = host_and_port;
 
@@ -98,22 +92,22 @@ static void ProxyConnect(struct lws_context* context)
     if(cd->proxyConnection)
         return;
 
-    if(cd->proxyHost.empty() || !cd->proxyPort || cd->proxyPath.empty()) {
+    if(cd->config.proxyHost.empty() || !cd->config.proxyPort) {
         lwsl_err("Missing required connect parameter.\n");
         return;
     }
 
-    char host_and_port[cd->proxyHost.size() + 1 + 5 + 1];
+    char host_and_port[cd->config.proxyHost.size() + 1 + 5 + 1];
     snprintf(host_and_port, sizeof(host_and_port), "%s:%u",
-        cd->proxyHost.c_str(), cd->proxyPort);
+        cd->config.proxyHost.c_str(), cd->config.proxyPort);
 
     lwsl_notice("Connecting to proxy %s... \n", host_and_port);
 
     struct lws_client_connect_info connectInfo = {};
     connectInfo.context = context;
-    connectInfo.address = cd->proxyHost.c_str();
-    connectInfo.port = cd->proxyPort;
-    connectInfo.path = cd->proxyPath.c_str();
+    connectInfo.address = cd->config.proxyHost.c_str();
+    connectInfo.port = cd->config.proxyPort;
+    connectInfo.path = "/";
     connectInfo.protocol = "janus-agent-protocol";
     connectInfo.host = host_and_port;
 #if (LWS_LIBRARY_VERSION_MAJOR >= 3)
@@ -285,33 +279,19 @@ void Agent()
         { nullptr, nullptr, 0, 0, 0, nullptr } /* terminator */
     };
 
-    const std::string configDir = ::ConfigDir();
-    if(configDir.empty())
-        return;
-
-    const std::string certificatePath =
-        FullPath(configDir, "janus-signalling-agent.certificate");
-    const std::string privateKeyPath =
-        FullPath(configDir, "janus-signalling-agent.key");
-    if(certificatePath.empty() || privateKeyPath.empty())
-        return;
-
     ContextData contextData {};
 
-    contextData.serviceHost = "localhost";
-    contextData.servicePort = SERVICE_PORT;
-    contextData.servicePath = "/";
-
-    contextData.proxyHost = "localhost";
-    contextData.proxyPort = SECURE_PROXY_PORT;
-    contextData.proxyPath = "/";
+    if(!LoadConfig(&contextData.config)) {
+        lwsl_err("Fail load config\n");
+        return;
+    }
 
     lws_context_creation_info wsInfo {};
     wsInfo.protocols = protocols;
     wsInfo.port = CONTEXT_PORT_NO_LISTEN;
     wsInfo.options |= LWS_SERVER_OPTION_DO_SSL_GLOBAL_INIT;
-    wsInfo.ssl_cert_filepath = certificatePath.c_str();
-    wsInfo.ssl_private_key_filepath = privateKeyPath.c_str();
+    wsInfo.ssl_cert_filepath = contextData.config.authCertificate.c_str();
+    wsInfo.ssl_private_key_filepath = contextData.config.authKey.c_str();
     wsInfo.user = &contextData;
 
     LwsContextPtr contextPtr(lws_create_context(&wsInfo));
