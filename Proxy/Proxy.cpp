@@ -7,7 +7,6 @@
 #include <set>
 #include <map>
 
-#include <glib.h>
 #include <libwebsockets.h>
 #include <jansson.h>
 
@@ -18,6 +17,7 @@
 
 #include "Common/MessageBuffer.h"
 #include "Common/Base62.h"
+#include "Common/ConfigHelpers.h"
 
 
 enum {
@@ -587,30 +587,6 @@ static int WsCallback(
     }
 
     return 0;
-}
-
-static std::string ConfigDir()
-{
-    const gchar* configDir = g_get_user_config_dir();
-    if(!configDir) {
-        return std::string();
-    }
-
-    return configDir;
-}
-
-static std::string FullPath(const std::string& configDir, const std::string& path)
-{
-    std::string fullPath;
-    if(!g_path_is_absolute(path.c_str())) {
-        gchar* tmpPath =
-            g_build_filename(configDir.c_str(), path.c_str(), NULL);
-        fullPath = tmpPath;
-        g_free(tmpPath);
-    } else
-        fullPath = path;
-
-    return fullPath;
 }
 
 void Proxy()
