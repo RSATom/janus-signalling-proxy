@@ -168,6 +168,9 @@ int main(int , char*[])
 
     lwsl_notice("------ TestClient ------\n");
     TestClient();
+
+    if(serverThread.joinable())
+        serverThread.join();
 #else
     std::thread serverThread(
         [] () {
@@ -179,6 +182,9 @@ int main(int , char*[])
 
     lwsl_notice("------ Agent ------\n");
     Agent();
+
+    if(serverThread.joinable())
+        serverThread.join();
 #endif
 
     return 0;
