@@ -18,13 +18,11 @@
 #include "Common/MessageBuffer.h"
 #include "Common/Base62.h"
 #include "Common/ConfigHelpers.h"
+#include "ProxyConfig.h"
 
 
 enum {
     RX_BUFFER_SIZE = 512,
-
-    DEFAULT_PORT = 8188,
-    DEFAULT_SECURE_PORT = 8989,
 };
 
 enum {
@@ -44,6 +42,8 @@ typedef std::map<std::string, SenderTransaction> Transactions;
 
 struct ContextData
 {
+    ProxyConfig config;
+
     X509_STOREPtr allowedService;
 
     lws* service;
@@ -323,11 +323,9 @@ static bool RouteMessage(lws* wsi, MessageBuffer* message)
         return RouteMessageToService(wsi, message);
 }
 
-static bool LoadServiceCertificate(
-    const std::string& serviceCertificatePath,
-    ContextData* contextData)
+static bool LoadServiceCertificate(ContextData* contextData)
 {
-    if(serviceCertificatePath.empty() || !contextData)
+    if(contextData->config.agentCertificate.empty() || !contextData)
         return false;
 
     enum {
@@ -339,7 +337,7 @@ static bool LoadServiceCertificate(
 
     gchar* certificate;
     gsize certLength;
-    if(!g_file_get_contents(serviceCertificatePath.c_str(), &certificate, &certLength, nullptr)) {
+    if(!g_file_get_contents(contextData->config.agentCertificate.c_str(), &certificate, &certLength, nullptr)) {
         lwsl_err("Fail load service certificate\n");
         return false;
     }
@@ -625,24 +623,15 @@ void Proxy()
         { nullptr, nullptr, 0, 0 } /* terminator */
     };
 
-    const std::string configDir = ::ConfigDir();
-    if(configDir.empty())
-        return;
-
-    const std::string certificatePath =
-        FullPath(configDir, "janus-signalling-proxy.certificate");
-    const std::string privateKeyPath =
-        FullPath(configDir, "janus-signalling-proxy.key");
-    if(certificatePath.empty() || privateKeyPath.empty())
-        return;
-
-    const std::string serviceCertificatePath =
-        FullPath(configDir, "janus-signalling-agent.certificate");
-
     ContextData contextData {};
     contextData.serviceTransactionCounter = 1;
 
-    if(!LoadServiceCertificate(serviceCertificatePath, &contextData))
+    if(!LoadConfig(&contextData.config)) {
+        lwsl_err("Fail load config\n");
+        return;
+    }
+
+    if(!LoadServiceCertificate(&contextData))
         return;
 
     lws_context_creation_info wsInfo {};
@@ -655,7 +644,7 @@ void Proxy()
         return;
 
     lws_context_creation_info vhostInfo {};
-    vhostInfo.port = DEFAULT_PORT;
+    vhostInfo.port = contextData.config.port;
     vhostInfo.protocols = protocols;
 
     lws_vhost* vhost = lws_create_vhost(context, &vhostInfo);
@@ -663,10 +652,10 @@ void Proxy()
          return;
 
     lws_context_creation_info secureVhostInfo {};
-    secureVhostInfo.port = DEFAULT_SECURE_PORT;
+    secureVhostInfo.port = contextData.config.securePort;
     secureVhostInfo.protocols = secureProtocols;
-    secureVhostInfo.ssl_cert_filepath = certificatePath.c_str();
-    secureVhostInfo.ssl_private_key_filepath = privateKeyPath.c_str();
+    secureVhostInfo.ssl_cert_filepath = contextData.config.certificate.c_str();
+    secureVhostInfo.ssl_private_key_filepath = contextData.config.key.c_str();
     secureVhostInfo.options |= LWS_SERVER_OPTION_DO_SSL_GLOBAL_INIT;
     // secureVhostInfo.options |= LWS_SERVER_OPTION_REDIRECT_HTTP_TO_HTTPS;
     secureVhostInfo.options |= LWS_SERVER_OPTION_REQUIRE_VALID_OPENSSL_CLIENT_CERT;
