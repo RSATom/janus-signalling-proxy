@@ -1,0 +1,31 @@
+name: janus-signalling-proxy
+base: core18
+version: '0.0.1'
+summary: Proxy and Agent apps to get access to Janus Gateway instance behind NAT
+description: read <summary>
+grade: devel
+confinement: devmode
+
+parts:
+  main:
+    plugin: cmake
+    source-type: git
+    source: https://github.com/RSATom/janus-signalling-proxy.git
+    build-packages:
+      - g++
+      - make
+      - pkg-config
+      - libglib2.0-dev
+      - libconfig-dev
+      - libjansson-dev
+      - libwebsockets-dev
+    stage-packages:
+      - libwebsockets8
+      - libconfig9
+      - libjansson4
+
+apps:
+  agent:
+    command: AgentApp
+  proxy:
+    command: ProxyApp
