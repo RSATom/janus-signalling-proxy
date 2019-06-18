@@ -289,10 +289,8 @@ void Agent()
 
     ContextData contextData {};
 
-    if(!LoadConfig(&contextData.config)) {
-        lwsl_err("Fail load config\n");
+    if(!LoadConfig(&contextData.config))
         return;
-    }
 
     lws_context_creation_info wsInfo {};
     wsInfo.gid = -1;

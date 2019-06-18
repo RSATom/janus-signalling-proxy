@@ -19,7 +19,7 @@ bool LoadConfig(AgentConfig* agentConfig)
     ConfigDestroy ConfigDestroy(&config);
 
     const std::string configFile = configDir + "/janus-signalling-agent.conf";
-
+    lwsl_notice("Trying load config: %s\n", configFile.c_str());
     if(!config_read_file(&config, configFile.c_str())) {
         lwsl_err("Fail load config. %s. %s:%d\n",
             config_error_text(&config),
