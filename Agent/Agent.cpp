@@ -118,7 +118,7 @@ static void ProxyConnect(struct lws_context* context)
     connectInfo.ssl_connection |= LCCSCF_ALLOW_EXPIRED;
 #endif
 #else
-    connectInfo.ssl_connection = TRUE;
+    connectInfo.ssl_connection = 1;
 #endif
 
     cd->proxyConnection = lws_client_connect_via_info(&connectInfo);
