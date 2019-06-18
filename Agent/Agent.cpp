@@ -159,11 +159,11 @@ static int WsCallback(
     const bool isServiceConnection = IsServiceConnection(wsi);
 
     switch (reason) {
-        case LWS_CALLBACK_PROTOCOL_INIT:
-            lwsl_notice("LWS_CALLBACK_PROTOCOL_INIT\n");
-            break;
         case LWS_CALLBACK_CLIENT_ESTABLISHED:
-            lwsl_notice("LWS_CALLBACK_CLIENT_ESTABLISHED\n");
+            if(isServiceConnection)
+                lwsl_notice("Service connection established\n");
+            else
+                lwsl_notice("Proxy connection established\n");
 
             sd->data = new SessionData;
 
@@ -171,8 +171,6 @@ static int WsCallback(
                 ProxyConnect(lws_get_context(wsi));
             break;
         case LWS_CALLBACK_CLIENT_RECEIVE:
-            lwsl_notice("LWS_CALLBACK_CLIENT_RECEIVE\n");
-
             if(isServiceConnection && !cd->proxyConnection)
                 return -1;
             else if(!isServiceConnection && !cd->serviceConnection)
@@ -183,9 +181,9 @@ static int WsCallback(
 
                 if(!RouteMessage(wsi, &(sd->data->incomingMessage))) {
                     if(isServiceConnection)
-                        lwsl_err("fail route message client\n");
+                        lwsl_err("Fail route message client\n");
                     else
-                        lwsl_err("fail route message service\n");
+                        lwsl_err("Fail route message service\n");
 
                     return -1;
                 }
@@ -195,8 +193,6 @@ static int WsCallback(
 
             break;
         case LWS_CALLBACK_CLIENT_WRITEABLE:
-            lwsl_notice("LWS_CALLBACK_CLIENT_WRITEABLE\n");
-
             if(isServiceConnection && !cd->proxyConnection)
                 return -1;
             else if(!isServiceConnection && !cd->serviceConnection)
@@ -205,7 +201,7 @@ static int WsCallback(
             if(!sd->data->sendMessages.empty()) {
                 MessageBuffer& buffer = sd->data->sendMessages.front();
                 if(!buffer.writeAsText(wsi)) {
-                    lwsl_err("write failed\n");
+                    lwsl_err("Write failed\n");
                     return -1;
                 }
 
@@ -217,12 +213,13 @@ static int WsCallback(
 
             break;
         case LWS_CALLBACK_CLIENT_CLOSED:
-            lwsl_notice("LWS_CALLBACK_CLIENT_CLOSED\n");
-
             if(isServiceConnection && cd->proxyConnection) {
+                lwsl_notice("Service connection closed\n");
                 lws_callback_on_writable(cd->proxyConnection);
-            } else if(!isServiceConnection && cd->serviceConnection)
+            } else if(!isServiceConnection && cd->serviceConnection) {
+                lwsl_notice("Proxy connection closed\n");
                 lws_callback_on_writable(cd->serviceConnection);
+            }
 
             delete sd->data;
             sd = nullptr;
@@ -234,12 +231,21 @@ static int WsCallback(
 
             break;
         case LWS_CALLBACK_CLIENT_CONNECTION_ERROR:
-            lwsl_notice("LWS_CALLBACK_CLIENT_CONNECTION_ERROR\n");
+            if(isServiceConnection && cd->proxyConnection) {
+                if(in)
+                    lwsl_notice("Service connection failed. %s\n", in);
+                else
+                    lwsl_notice("Service connection failed\n");
 
-            if(isServiceConnection && cd->proxyConnection)
                 lws_callback_on_writable(cd->proxyConnection);
-            else if(!isServiceConnection && cd->serviceConnection)
+            } else if(!isServiceConnection && cd->serviceConnection) {
+                if(in)
+                    lwsl_notice("Proxy connection failed. %s\n", in);
+                else
+                    lwsl_notice("Proxy connection failed\n");
+
                 lws_callback_on_writable(cd->serviceConnection);
+            }
 
             if(sd) {
                 delete sd->data;
