@@ -241,8 +241,10 @@ static int WsCallback(
             else if(!isServiceConnection && cd->serviceConnection)
                 lws_callback_on_writable(cd->serviceConnection);
 
-            delete sd->data;
-            sd = nullptr;
+            if(sd) {
+                delete sd->data;
+                sd = nullptr;
+            }
 
             if(isServiceConnection)
                 cd->serviceConnection = nullptr;
