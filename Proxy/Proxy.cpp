@@ -635,6 +635,8 @@ void Proxy()
         return;
 
     lws_context_creation_info wsInfo {};
+    wsInfo.gid = -1;
+    wsInfo.uid = -1;
     wsInfo.options = LWS_SERVER_OPTION_EXPLICIT_VHOSTS;
     wsInfo.user = &contextData;
 

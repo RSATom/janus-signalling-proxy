@@ -295,6 +295,8 @@ void Agent()
     }
 
     lws_context_creation_info wsInfo {};
+    wsInfo.gid = -1;
+    wsInfo.uid = -1;
     wsInfo.protocols = protocols;
     wsInfo.port = CONTEXT_PORT_NO_LISTEN;
     wsInfo.options |= LWS_SERVER_OPTION_DO_SSL_GLOBAL_INIT;
