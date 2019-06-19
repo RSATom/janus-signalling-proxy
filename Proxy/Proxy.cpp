@@ -630,8 +630,10 @@ void Proxy()
     ContextData contextData {};
     contextData.serviceTransactionCounter = 1;
 
-    if(!LoadConfig(&contextData.config))
+    if(!LoadConfig(&contextData.config)) {
+        lwsl_err("Fail load config file.\n");
         return;
+    }
 
     if(!LoadServiceCertificate(&contextData))
         return;
