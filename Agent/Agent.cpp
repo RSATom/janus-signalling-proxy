@@ -29,6 +29,8 @@ enum {
 };
 #endif
 
+namespace {
+
 struct ContextData
 {
     AgentConfig config;
@@ -49,6 +51,8 @@ struct SessionContextData
 {
     SessionData* data;
 };
+
+}
 
 static bool IsServiceConnection(lws* wsi)
 {

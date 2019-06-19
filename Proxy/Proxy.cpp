@@ -32,6 +32,8 @@ enum {
     SECURE_SERVICE_PROTOCOL_ID,
 };
 
+namespace {
+
 struct SenderTransaction
 {
     std::string transaction;
@@ -74,6 +76,8 @@ struct SessionContextData
 {
     SessionData* data;
 };
+
+}
 
 static bool IsServiceConnection(lws* wsi)
 {
