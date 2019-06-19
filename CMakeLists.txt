@@ -2,6 +2,10 @@ cmake_minimum_required(VERSION 3.0)
 
 project(janus-signalling-proxy)
 
+if(DEFINED ENV{SNAPCRAFT_BUILD_ENVIRONMENT})
+    add_definitions(-DSNAPCRAFT_BUILD=1)
+endif()
+
 if(CMAKE_COMPILER_IS_GNUCC)
     add_definitions(-Wall)
 endif(CMAKE_COMPILER_IS_GNUCC)
