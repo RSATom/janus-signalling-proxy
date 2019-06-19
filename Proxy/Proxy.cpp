@@ -327,7 +327,7 @@ static bool RouteMessage(lws* wsi, MessageBuffer* message)
         return RouteMessageToService(wsi, message);
 }
 
-static bool LoadServiceCertificate(ContextData* contextData)
+static bool LoadAuthCertificate(ContextData* contextData)
 {
     if(contextData->config.agentCertificate.empty() || !contextData)
         return false;
@@ -635,8 +635,10 @@ void Proxy()
         return;
     }
 
-    if(!LoadServiceCertificate(&contextData))
+    if(!LoadAuthCertificate(&contextData)) {
+        lwsl_err("Fail load auth certificate.\n");
         return;
+    }
 
     lws_context_creation_info wsInfo {};
     wsInfo.gid = -1;
