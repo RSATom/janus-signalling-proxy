@@ -1,7 +1,7 @@
 #pragma once
 
 #include <string>
+#include <deque>
 
-
-std::string ConfigDir();
+std::deque<std::string> ConfigDirs();
 std::string FullPath(const std::string& configDir, const std::string& path);

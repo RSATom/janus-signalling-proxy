@@ -3,14 +3,21 @@
 #include <glib.h>
 
 
-std::string ConfigDir()
+std::deque<std::string> ConfigDirs()
 {
-    const gchar* configDir = g_get_user_config_dir();
-    if(!configDir) {
-        return std::string();
+    std::deque<std::string> dirs;
+
+    const gchar * const *systemConfigDirs = g_get_system_config_dirs();
+    while(*systemConfigDirs) {
+        dirs.push_back(*systemConfigDirs);
+        ++systemConfigDirs;
     }
 
-    return configDir;
+    const gchar* configDir = g_get_user_config_dir();
+    if(configDir)
+        dirs.push_back(configDir);
+
+    return dirs;
 }
 
 std::string FullPath(const std::string& configDir, const std::string& path)
