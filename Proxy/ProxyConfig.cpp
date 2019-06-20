@@ -65,16 +65,35 @@ bool LoadConfig(ProxyConfig* outConfig)
         }
     }
 
-    if(!loadedConfig.port)
-        return false;
+    bool success = true;
 
-    if(!loadedConfig.securePort || loadedConfig.certificate.empty() || loadedConfig.key.empty())
-        return false;
+    if(!loadedConfig.port) {
+        lwsl_err("Missing port\n");
+        success = false;
+    }
 
-    if(loadedConfig.agentCertificate.empty())
-        return false;
+    if(!loadedConfig.securePort) {
+        lwsl_err("Missing secure port\n");
+        success = false;
+    }
 
-    *outConfig = loadedConfig;
+    if(loadedConfig.certificate.empty()) {
+        lwsl_err("Missing certificate\n");
+        success = false;
+    }
 
-    return true;
+    if(loadedConfig.key.empty()) {
+        lwsl_err("Missing key\n");
+        success = false;
+    }
+
+    if(loadedConfig.agentCertificate.empty()) {
+        lwsl_err("Missing agent certificate\n");
+        success = false;
+    }
+
+    if(success)
+        *outConfig = loadedConfig;
+
+    return success;
 }

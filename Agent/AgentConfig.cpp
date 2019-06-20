@@ -69,16 +69,40 @@ bool LoadConfig(AgentConfig* agentConfig)
         }
     }
 
-    if(loadedConfig.proxyHost.empty() || !loadedConfig.proxyPort)
-        return false;
+    bool success = true;
 
-    if(loadedConfig.authCertificate.empty() || loadedConfig.authKey.empty())
-        return false;
+    if(loadedConfig.proxyHost.empty()) {
+        lwsl_err("Missing proxy host\n");
+        success = false;
+    }
 
-    if(loadedConfig.serviceHost.empty() || !loadedConfig.servicePort)
-        return false;
+    if(!loadedConfig.proxyPort) {
+        lwsl_err("Missing proxy port\n");
+        success = false;
+    }
 
-    *agentConfig = loadedConfig;
+    if(loadedConfig.authCertificate.empty()) {
+        lwsl_err("Missing auth certificate\n");
+        success = false;
+    }
 
-    return true;
+    if(loadedConfig.authKey.empty()) {
+        lwsl_err("Missing auth key\n");
+        success = false;
+    }
+
+    if(loadedConfig.serviceHost.empty()) {
+        lwsl_err("Missing Janus Server host\n");
+        success = false;
+    }
+
+    if(!loadedConfig.servicePort) {
+        lwsl_err("Missing Janus Server port\n");
+        success = false;
+    }
+
+    if(success)
+        *agentConfig = loadedConfig;
+
+    return success;
 }
