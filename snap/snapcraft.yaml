@@ -31,5 +31,10 @@ parts:
 apps:
   agent:
     command: AgentApp
+    plugs:
+      - network
   proxy:
     command: ProxyApp
+    plugs:
+      - network-bind
+      - network
