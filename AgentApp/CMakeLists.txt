@@ -14,3 +14,6 @@ target_link_libraries(${PROJECT_NAME}
     Agent)
 
 install(TARGETS AgentApp DESTINATION bin)
+if(SNAPCRAFT_BUILD)
+    install(FILES janus-signalling-agent.conf DESTINATION etc)
+endif()

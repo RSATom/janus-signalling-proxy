@@ -14,3 +14,6 @@ target_link_libraries(${PROJECT_NAME}
     Proxy)
 
 install(TARGETS ProxyApp DESTINATION bin)
+if(SNAPCRAFT_BUILD)
+    install(FILES janus-signalling-proxy.conf DESTINATION etc)
+endif()

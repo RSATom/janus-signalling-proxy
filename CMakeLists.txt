@@ -4,6 +4,7 @@ project(janus-signalling-proxy)
 
 if(DEFINED ENV{SNAPCRAFT_BUILD_ENVIRONMENT})
     add_definitions(-DSNAPCRAFT_BUILD=1)
+    set(SNAPCRAFT_BUILD YES)
 endif()
 
 if(CMAKE_COMPILER_IS_GNUCC)
