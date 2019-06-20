@@ -8,8 +8,8 @@ std::deque<std::string> ConfigDirs()
     std::deque<std::string> dirs;
 
 #ifdef SNAPCRAFT_BUILD
-    if(const gchar* data = g_getenv("SNAP_DATA"))
-        dirs.push_back(data);
+    if(const gchar* data = g_getenv("SNAP"))
+        dirs.push_back(std::string(data) + "/etc");
 
     if(const gchar* common = g_getenv("SNAP_COMMON"))
         dirs.push_back(common);
@@ -19,11 +19,11 @@ std::deque<std::string> ConfigDirs()
         dirs.push_back(*systemConfigDirs);
         ++systemConfigDirs;
     }
-#endif
 
     const gchar* configDir = g_get_user_config_dir();
     if(configDir)
         dirs.push_back(configDir);
+#endif
 
     return dirs;
 }
