@@ -5,6 +5,10 @@ summary: Proxy and Agent apps to get access to Janus Gateway instance behind NAT
 description: read <summary>
 grade: devel
 confinement: devmode
+architectures:
+  - build-on: amd64
+  - build-on: i386
+  - build-on: armhf
 
 parts:
   main:
