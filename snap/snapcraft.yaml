@@ -31,10 +31,12 @@ parts:
 apps:
   agent:
     command: AgentApp
+    daemon: simple
     plugs:
       - network
   proxy:
     command: ProxyApp
+    daemon: simple
     plugs:
       - network-bind
       - network
