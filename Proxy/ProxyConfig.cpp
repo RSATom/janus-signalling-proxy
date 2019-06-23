@@ -59,7 +59,7 @@ bool LoadConfig(ProxyConfig* outConfig)
         config_setting_t* agentConfig = config_lookup(&config, "agent");
         if(agentConfig && CONFIG_TRUE == config_setting_is_group(agentConfig)) {
             const char* agentCert = nullptr;
-            if(CONFIG_TRUE == config_setting_lookup_string(proxyConfig, "certificate", &agentCert)) {
+            if(CONFIG_TRUE == config_setting_lookup_string(agentConfig, "certificate", &agentCert)) {
                 loadedConfig.agentCertificate  = FullPath(configDir, agentCert);
             }
         }
