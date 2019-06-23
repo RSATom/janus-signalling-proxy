@@ -655,6 +655,7 @@ void Proxy()
     lws_context_creation_info vhostInfo {};
     vhostInfo.port = contextData.config.port;
     vhostInfo.protocols = protocols;
+    vhostInfo.vhost_name = contextData.config.hostname.c_str();
 
     lws_vhost* vhost = lws_create_vhost(context, &vhostInfo);
     if(!vhost)
@@ -665,6 +666,7 @@ void Proxy()
     secureVhostInfo.protocols = secureProtocols;
     secureVhostInfo.ssl_cert_filepath = contextData.config.certificate.c_str();
     secureVhostInfo.ssl_private_key_filepath = contextData.config.key.c_str();
+    secureVhostInfo.vhost_name = contextData.config.hostname.c_str();
     // secureVhostInfo.options |= LWS_SERVER_OPTION_REDIRECT_HTTP_TO_HTTPS;
     secureVhostInfo.options |= LWS_SERVER_OPTION_REQUIRE_VALID_OPENSSL_CLIENT_CERT;
     secureVhostInfo.options |= LWS_SERVER_OPTION_PEER_CERT_NOT_REQUIRED;

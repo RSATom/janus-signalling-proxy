@@ -5,6 +5,8 @@
 
 struct ProxyConfig
 {
+    std::string hostname;
+
     unsigned short port;
 
     unsigned short securePort;

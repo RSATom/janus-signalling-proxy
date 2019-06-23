@@ -38,6 +38,10 @@ bool LoadConfig(ProxyConfig* outConfig)
 
         config_setting_t* proxyConfig = config_lookup(&config, "proxy");
         if(proxyConfig && CONFIG_TRUE == config_setting_is_group(proxyConfig)) {
+            const char* hostname = nullptr;
+            if(CONFIG_TRUE == config_setting_lookup_string(proxyConfig, "hostname", &hostname)) {
+                loadedConfig.hostname = hostname;
+            }
             int wsPort = 0;
             if(CONFIG_TRUE == config_setting_lookup_int(proxyConfig, "ws_port", &wsPort)) {
                 loadedConfig.port = static_cast<unsigned short>(wsPort);
@@ -66,6 +70,11 @@ bool LoadConfig(ProxyConfig* outConfig)
     }
 
     bool success = true;
+
+    if(loadedConfig.hostname.empty()) {
+        lwsl_err("Missing hostname\n");
+        success = false;
+    }
 
     if(!loadedConfig.port) {
         lwsl_err("Missing port\n");
