@@ -36,7 +36,9 @@ struct ContextData
     AgentConfig config;
 
     lws* serviceConnection;
+    bool serviceConnected;
     lws* proxyConnection;
+    bool proxyConnected;
 };
 
 struct SessionData
@@ -60,7 +62,7 @@ static bool IsServiceConnection(lws* wsi)
     return protocol ? SERVICE_PROTOCOL_ID == protocol->id : false;
 }
 
-static void ServiceConnect(struct lws_context* context)
+static void ServiceConnect(struct lws_context* context, lws_vhost* vhost)
 {
     ContextData* cd = static_cast<ContextData*>(lws_context_user(context));
 
@@ -85,11 +87,13 @@ static void ServiceConnect(struct lws_context* context)
     connectInfo.path = "/";
     connectInfo.protocol = "janus-protocol";
     connectInfo.host = host_and_port;
+    connectInfo.vhost = vhost;
 
     cd->serviceConnection = lws_client_connect_via_info(&connectInfo);
+    cd->serviceConnected = false;
 }
 
-static void ProxyConnect(struct lws_context* context)
+static void ProxyConnect(struct lws_context* context, lws_vhost* vhost)
 {
     ContextData* cd = static_cast<ContextData*>(lws_context_user(context));
 
@@ -114,6 +118,7 @@ static void ProxyConnect(struct lws_context* context)
     connectInfo.path = "/";
     connectInfo.protocol = "janus-agent-protocol";
     connectInfo.host = host_and_port;
+    connectInfo.vhost = vhost;
 #if (LWS_LIBRARY_VERSION_MAJOR >= 3)
     connectInfo.ssl_connection = LCCSCF_USE_SSL;
 #ifndef NDEBUG
@@ -126,6 +131,7 @@ static void ProxyConnect(struct lws_context* context)
 #endif
 
     cd->proxyConnection = lws_client_connect_via_info(&connectInfo);
+    cd->proxyConnected = false;
 }
 
 static bool RouteMessage(lws* wsi, MessageBuffer* message)
@@ -172,7 +178,10 @@ static int WsCallback(
             sd->data = new SessionData;
 
             if(isServiceConnection)
-                ProxyConnect(lws_get_context(wsi));
+                cd->serviceConnected = true;
+            else
+                cd->proxyConnected = true;
+
             break;
         case LWS_CALLBACK_CLIENT_RECEIVE:
             if(isServiceConnection && !cd->proxyConnection)
@@ -228,13 +237,16 @@ static int WsCallback(
             delete sd->data;
             sd = nullptr;
 
-            if(isServiceConnection)
+            if(isServiceConnection) {
                 cd->serviceConnection = nullptr;
-            else
+                cd->serviceConnected = false;
+            } else {
                 cd->proxyConnection = nullptr;
+                cd->proxyConnected = false;
+            }
 
             break;
-        case LWS_CALLBACK_CLIENT_CONNECTION_ERROR:
+        case LWS_CALLBACK_CLIENT_CONNECTION_ERROR: {
             if(isServiceConnection && cd->proxyConnection) {
                 if(in)
                     lwsl_notice("Service connection failed. %s\n", in);
@@ -248,7 +260,9 @@ static int WsCallback(
                 else
                     lwsl_notice("Proxy connection failed\n");
 
-                lws_callback_on_writable(cd->serviceConnection);
+                // force disconnect from service only if there are possible active sessions
+                if(cd->proxyConnected)
+                    lws_callback_on_writable(cd->serviceConnection);
             }
 
             if(sd) {
@@ -256,12 +270,16 @@ static int WsCallback(
                 sd = nullptr;
             }
 
-            if(isServiceConnection)
+            if(isServiceConnection) {
                 cd->serviceConnection = nullptr;
-            else
+                cd->serviceConnected = false;
+            } else {
                 cd->proxyConnection = nullptr;
+                cd->proxyConnected = false;
+            }
 
             break;
+        }
         default:
             break;
     }
@@ -271,7 +289,7 @@ static int WsCallback(
 
 void Agent()
 {
-    const lws_protocols protocols[] = {
+    const lws_protocols serviceProtocols[] = {
         {
             "janus-protocol",
             WsCallback,
@@ -280,6 +298,10 @@ void Agent()
             SERVICE_PROTOCOL_ID,
             nullptr
         },
+        { nullptr, nullptr, 0, 0, 0, nullptr } /* terminator */
+    };
+
+    const lws_protocols proxyProtocols[] = {
         {
             "janus-agent-protocol",
             WsCallback,
@@ -290,7 +312,6 @@ void Agent()
         },
         { nullptr, nullptr, 0, 0, 0, nullptr } /* terminator */
     };
-
     ContextData contextData {};
 
     if(!LoadConfig(&contextData.config)) {
@@ -301,11 +322,8 @@ void Agent()
     lws_context_creation_info wsInfo {};
     wsInfo.gid = -1;
     wsInfo.uid = -1;
-    wsInfo.protocols = protocols;
     wsInfo.port = CONTEXT_PORT_NO_LISTEN;
-    wsInfo.options |= LWS_SERVER_OPTION_DO_SSL_GLOBAL_INIT;
-    wsInfo.ssl_cert_filepath = contextData.config.authCertificate.c_str();
-    wsInfo.ssl_private_key_filepath = contextData.config.authKey.c_str();
+    wsInfo.options = LWS_SERVER_OPTION_EXPLICIT_VHOSTS;
     wsInfo.user = &contextData;
 
     LwsContextPtr contextPtr(lws_create_context(&wsInfo));
@@ -313,17 +331,51 @@ void Agent()
     if(!context)
         return;
 
-    time_t wsDisconnectedTime = 1; // =1 to emulate timeout on startup
+    lws_context_creation_info serviceVhostInfo {};
+    serviceVhostInfo.gid = -1;
+    serviceVhostInfo.uid = -1;
+    serviceVhostInfo.port = CONTEXT_PORT_NO_LISTEN;
+    serviceVhostInfo.protocols = serviceProtocols;
+
+    lws_vhost* serviceVhost = lws_create_vhost(context, &serviceVhostInfo);
+    if(!serviceVhost)
+         return;
+
+    lws_context_creation_info proxyVhostInfo {};
+    proxyVhostInfo.gid = -1;
+    proxyVhostInfo.uid = -1;
+    proxyVhostInfo.port = CONTEXT_PORT_NO_LISTEN;
+    proxyVhostInfo.options = LWS_SERVER_OPTION_DO_SSL_GLOBAL_INIT;
+    proxyVhostInfo.protocols = proxyProtocols;
+    proxyVhostInfo.ssl_cert_filepath = contextData.config.authCertificate.c_str();
+    proxyVhostInfo.ssl_private_key_filepath = contextData.config.authKey.c_str();
+
+    lws_vhost* proxyVhost = lws_create_vhost(context, &proxyVhostInfo);
+    if(!proxyVhost)
+         return;
+
+    time_t serviceDisconnectedTime = 1; // =1 to emulate timeout on startup
+    time_t proxyDisconnectedTime = 1;
 
     while(lws_service(context, 50) >= 0) {
-        if(!contextData.serviceConnection && !contextData.proxyConnection) {
+        if(!contextData.serviceConnection) {
             struct timespec now;
             if(0 == clock_gettime(CLOCK_MONOTONIC, &now)) {
-                if(!wsDisconnectedTime) {
-                    wsDisconnectedTime = now.tv_sec;
-                } else if(now.tv_sec - wsDisconnectedTime > RECONNECT_TIMEOUT) {
-                    ServiceConnect(context);
-                    wsDisconnectedTime = 0;
+                if(!serviceDisconnectedTime) {
+                    serviceDisconnectedTime = now.tv_sec;
+                } else if(now.tv_sec - serviceDisconnectedTime > RECONNECT_TIMEOUT) {
+                    ServiceConnect(context, serviceVhost);
+                    serviceDisconnectedTime = 0;
+                }
+            }
+        } else if(contextData.serviceConnected && !contextData.proxyConnection) {
+            struct timespec now;
+            if(0 == clock_gettime(CLOCK_MONOTONIC, &now)) {
+                if(!proxyDisconnectedTime) {
+                    proxyDisconnectedTime = now.tv_sec;
+                } else if(now.tv_sec - proxyDisconnectedTime > RECONNECT_TIMEOUT) {
+                    ProxyConnect(context, proxyVhost);
+                    proxyDisconnectedTime = 0;
                 }
             }
         }
