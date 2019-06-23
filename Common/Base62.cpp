@@ -74,7 +74,7 @@ Base62Number& Base62Number::operator++()
     return *this;
 }
 
-std::string&& Base62Number::str() const
+std::string Base62Number::str() const
 {
-    return std::move(std::string(_body.begin(), _body.end()));
+    return std::string(_body.begin(), _body.end());
 }

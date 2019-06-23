@@ -12,7 +12,7 @@ public:
     Base62Number& operator= (unsigned);
     Base62Number& operator++();
 
-    std::string&& str() const;
+    std::string str() const;
 
 private:
     const unsigned _limit;

@@ -85,7 +85,7 @@ static bool IsServiceConnection(lws* wsi)
     return SECURE_SERVICE_PROTOCOL_ID == protocol->id;
 }
 
-static std::string&& ExtractJanus(const JsonPtr& jsonMessagePtr)
+static std::string ExtractJanus(const JsonPtr& jsonMessagePtr)
 {
     json_t* jsonMessage = jsonMessagePtr.get();
 
@@ -94,12 +94,12 @@ static std::string&& ExtractJanus(const JsonPtr& jsonMessagePtr)
         janus = json_string_value(jsonJanus);
 
     if(!janus)
-        return std::move(std::string());
+        return std::string();
 
-    return std::move(std::string(janus));
+    return std::string(janus);
 }
 
-static std::string&& ExtractTransaction(const JsonPtr& jsonMessagePtr)
+static std::string ExtractTransaction(const JsonPtr& jsonMessagePtr)
 {
     json_t* jsonMessage = jsonMessagePtr.get();
 
@@ -108,9 +108,9 @@ static std::string&& ExtractTransaction(const JsonPtr& jsonMessagePtr)
         transaction = json_string_value(jsonTransaction);
 
     if(!transaction)
-        return std::move(std::string());
+        return std::string();
 
-    return std::move(std::string(transaction));
+    return std::string(transaction);
 }
 
 static json_int_t ExtractSessionId(const JsonPtr& jsonMessagePtr)
