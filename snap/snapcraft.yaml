@@ -11,10 +11,24 @@ architectures:
   - build-on: armhf
 
 parts:
+  lws:
+    plugin: cmake
+    source-type: git
+    source: https://github.com/warmcat/libwebsockets.git
+    source-branch: v3.1-stable
+    configflags:
+      - -DLWS_WITH_ACME=ON
+      - -DLWS_WITHOUT_TESTAPPS=ON
+    build-packages:
+      - libssl-dev
+    stage-packages:
+      - libssl1.1
   main:
     plugin: cmake
     source-type: git
     source: https://github.com/RSATom/janus-signalling-proxy.git
+    after:
+        - lws
     build-packages:
       - g++
       - make
@@ -22,9 +36,7 @@ parts:
       - libglib2.0-dev
       - libconfig-dev
       - libjansson-dev
-      - libwebsockets-dev
     stage-packages:
-      - libwebsockets8
       - libconfig9
       - libjansson4
 
