@@ -2,6 +2,10 @@ cmake_minimum_required(VERSION 3.0)
 
 project(janus-signalling-proxy)
 
+option(BUILD_AGENT "Enable build Agent application" ON)
+option(BUILD_PROXY "Enable build Proxy application" ON)
+option(BUILD_TEST "Enable build Test application" OFF)
+
 if(DEFINED ENV{SNAPCRAFT_BUILD_ENVIRONMENT})
     add_definitions(-DSNAPCRAFT_BUILD=1)
     set(SNAPCRAFT_BUILD YES)
@@ -24,8 +28,17 @@ include_directories(
 
 add_subdirectory(deps/CxxPtr)
 add_subdirectory(Common)
-add_subdirectory(Agent)
-add_subdirectory(AgentApp)
-add_subdirectory(Proxy)
-add_subdirectory(ProxyApp)
-add_subdirectory(Test)
+
+if(BUILD_AGENT)
+    add_subdirectory(Agent)
+    add_subdirectory(AgentApp)
+endif(BUILD_AGENT)
+
+if(BUILD_PROXY)
+    add_subdirectory(Proxy)
+    add_subdirectory(ProxyApp)
+endif(BUILD_PROXY)
+
+if(BUILD_TEST)
+    add_subdirectory(Test)
+endif(BUILD_TEST)
