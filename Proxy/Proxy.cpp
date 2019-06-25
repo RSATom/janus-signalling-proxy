@@ -644,7 +644,6 @@ void Proxy()
     wsInfo.gid = -1;
     wsInfo.uid = -1;
     wsInfo.options = LWS_SERVER_OPTION_EXPLICIT_VHOSTS;
-    wsInfo.options |= LWS_SERVER_OPTION_DO_SSL_GLOBAL_INIT;
     wsInfo.user = &contextData;
 
     LwsContextPtr contextPtr(lws_create_context(&wsInfo));
@@ -667,6 +666,7 @@ void Proxy()
     secureVhostInfo.ssl_cert_filepath = contextData.config.certificate.c_str();
     secureVhostInfo.ssl_private_key_filepath = contextData.config.key.c_str();
     secureVhostInfo.vhost_name = contextData.config.hostname.c_str();
+    secureVhostInfo.options |= LWS_SERVER_OPTION_DO_SSL_GLOBAL_INIT;
     // secureVhostInfo.options |= LWS_SERVER_OPTION_REDIRECT_HTTP_TO_HTTPS;
     secureVhostInfo.options |= LWS_SERVER_OPTION_REQUIRE_VALID_OPENSSL_CLIENT_CERT;
     secureVhostInfo.options |= LWS_SERVER_OPTION_PEER_CERT_NOT_REQUIRED;
