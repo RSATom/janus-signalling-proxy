@@ -1,6 +1,6 @@
 name: janus-signalling-proxy-edge
 base: core18
-version: 'edge-git'
+version: git
 summary: Proxy and Agent apps to get access to Janus Gateway instance behind NAT
 description: read <summary>
 license: GPL-3.0+
