@@ -409,7 +409,7 @@ static bool AuthenticateService(X509* cert, ContextData* cd)
         return false;
 
     if(!X509_verify_cert(ctx)) {
-        lwsl_err("Service certificate is NOT allowed");
+        lwsl_err("Service certificate is NOT allowed\n");
         return false;
     }
 
@@ -570,14 +570,14 @@ static int WsCallback(
                 for(lws* wsi: cd->clients)
                     lws_callback_on_writable(wsi);
 
-                lwsl_notice("Service disconnected");
+                lwsl_notice("Service disconnected\n");
             } else {
                 ClientSessionData* clientSessionData =
                     static_cast<ClientSessionData*>(sd->data);
                 OnClientSessionEnd(cd, clientSessionData);
 
                 cd->clients.erase(wsi);
-                lwsl_notice("Client disconnected");
+                lwsl_notice("Client disconnected\n");
             }
 
             delete sd->data;
