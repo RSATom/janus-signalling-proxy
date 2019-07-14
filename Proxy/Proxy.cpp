@@ -52,7 +52,7 @@ struct ContextData
     std::set<lws*> clients;
 
     Base62Number serviceTransactionCounter;
-    Transactions transactions;
+    Transactions createSessionTransactions;
 
     std::map<json_int_t, lws*> sessions;
 };
@@ -65,8 +65,8 @@ struct SessionData
 
 struct ClientSessionData : public SessionData
 {
-    std::set<std::string> serviceTransactions;
     std::string createSessionTransaction;
+    std::string destroySessionTransaction;
     json_int_t sessionId = 0;
 };
 
@@ -143,14 +143,23 @@ static json_int_t ExtractNewSessionId(const JsonPtr& jsonMessagePtr)
 
 void OnClientSessionEnd(ContextData* cd, ClientSessionData* clientSessionData)
 {
-    for(auto& t: clientSessionData->serviceTransactions) {
-        cd->transactions.erase(t);
-    }
-    clientSessionData->serviceTransactions.clear();
     if(clientSessionData->sessionId) {
         cd->sessions.erase(clientSessionData->sessionId);
         clientSessionData->sessionId = json_int_t();
     }
+}
+
+static void SerializeMessage(json_t* jsonMessage, MessageBuffer* outMessage)
+{
+    outMessage->clear();
+
+    auto jsonCallback =
+        [] (const char* buffer, size_t size, void* data) -> int {
+            MessageBuffer* message = static_cast<MessageBuffer*>(data);
+            message->append(buffer, size);
+            return 0;
+        };
+    json_dump_callback(jsonMessage, jsonCallback, outMessage, JSON_COMPACT);
 }
 
 static bool RouteMessageToService(lws* wsi, MessageBuffer* message)
@@ -179,10 +188,11 @@ static bool RouteMessageToService(lws* wsi, MessageBuffer* message)
     if(messageTransaction.empty())
         return false;
 
-    // it should be session create message
     if(!clientSessionData->sessionId) {
         const std::string messageJanus =
             ExtractJanus(jsonMessagePtr);
+
+        // it should be session create message
         if(messageJanus.empty() || messageJanus != "create") {
             lwsl_err("First client message should be about session create. Disconnecting...\n");
             return false;
@@ -190,6 +200,20 @@ static bool RouteMessageToService(lws* wsi, MessageBuffer* message)
 
         clientSessionData->createSessionTransaction =
             messageTransaction;
+
+        // replace transaction with generated one
+        // to be able find out corresponding client on session create reply
+        const std::string serviceTransaction = cd->serviceTransactionCounter.str();
+        ++cd->serviceTransactionCounter;
+
+        SenderTransaction& clientTransaction = cd->createSessionTransactions[serviceTransaction];
+        clientTransaction.sender = wsi;
+        clientTransaction.transaction = messageTransaction;
+
+        JsonPtr jsonTransaction(json_string(serviceTransaction.c_str()));
+        json_object_set(jsonMessage, "transaction", jsonTransaction.get());
+
+        SerializeMessage(jsonMessage, message);
     } else {
         const std::string messageJanus =
             ExtractJanus(jsonMessagePtr);
@@ -198,31 +222,10 @@ static bool RouteMessageToService(lws* wsi, MessageBuffer* message)
             return false;
         }
 
-        if(messageJanus == "destroy" ) {
-            OnClientSessionEnd(cd, clientSessionData);
-        }
+        if(messageJanus == "destroy")
+            clientSessionData->destroySessionTransaction =
+                messageTransaction;
     }
-
-    const std::string serviceTransaction = cd->serviceTransactionCounter.str();
-    ++cd->serviceTransactionCounter;
-
-    SenderTransaction& clientTransaction = cd->transactions[serviceTransaction];
-    clientTransaction.sender = wsi;
-    clientTransaction.transaction = messageTransaction;
-    clientSessionData->serviceTransactions.insert(serviceTransaction);
-
-    JsonPtr jsonTransaction(json_string(serviceTransaction.c_str()));
-    json_object_set(jsonMessage, "transaction", jsonTransaction.get());
-
-    message->clear();
-
-    auto jsonCallback =
-        [] (const char* buffer, size_t size, void* data) -> int {
-            MessageBuffer* message = static_cast<MessageBuffer*>(data);
-            message->append(buffer, size);
-            return 0;
-        };
-    json_dump_callback(jsonMessage, jsonCallback, message, JSON_COMPACT);
 
     serviceSessionData->sendMessages.emplace_back(std::move(*message));
 
@@ -246,65 +249,13 @@ static bool RouteMessageToClient(lws* wsi, MessageBuffer* message)
 
     json_t* jsonMessage = jsonMessagePtr.get();
 
-    const std::string messageTransaction =
-        ExtractTransaction(jsonMessagePtr);
     const json_int_t sessionId =
         ExtractSessionId(jsonMessagePtr);
 
-    auto it =
-        !messageTransaction.empty() ?
-            cd->transactions.find(messageTransaction) :
-            cd->transactions.end();
-
-    if(it != cd->transactions.end()) {
-        // FIXME! add sessionId check
-
-        SenderTransaction& clientTransaction = it->second;
-
-        SessionContextData* clientSessionContextData =
-            static_cast<SessionContextData*>(lws_wsi_user(clientTransaction.sender));
-        ClientSessionData* clientSessionData =
-            static_cast<ClientSessionData*>(clientSessionContextData->data);
-        if(!clientSessionData->createSessionTransaction.empty()) {
-            if(clientSessionData->createSessionTransaction == clientTransaction.transaction) {
-                json_int_t newSessionId = ExtractNewSessionId(jsonMessagePtr);
-                lwsl_notice("Client session id received: %llu\n, ", newSessionId);
-                clientSessionData->createSessionTransaction.clear();
-                clientSessionData->sessionId = newSessionId;
-
-                cd->sessions.emplace(clientSessionData->sessionId, clientTransaction.sender);
-            } else {
-                // it should be create session reply, but it seems it's not
-                assert(false);
-            }
-        }
-
-        JsonPtr jsonTransaction(json_string(clientTransaction.transaction.c_str()));
-        json_object_set(jsonMessage, "transaction", jsonTransaction.get());
-
-        message->clear();
-
-        auto jsonCallback =
-            [] (const char* buffer, size_t size, void* data) -> int {
-                MessageBuffer* message = static_cast<MessageBuffer*>(data);
-                message->append(buffer, size);
-                return 0;
-            };
-        json_dump_callback(jsonMessage, jsonCallback, message, JSON_COMPACT);
-
-        clientSessionData->sendMessages.emplace_back(std::move(*message));
-
-        lws_callback_on_writable(clientTransaction.sender);
-
-        // transaction should be one-time usable
-        cd->transactions.erase(it);
-        clientSessionData->serviceTransactions.erase(messageTransaction);
-    } else if(sessionId) {
-        lwsl_warn("Fail find client by transaction. Trying to find by session_id...\n");
-
+    if(sessionId) {
         auto it = cd->sessions.find(sessionId);
         if(it != cd->sessions.end()) {
-            lwsl_warn("Found client by session_id.\n");
+            lwsl_debug("Found client by session_id %llu \n", sessionId);
             SessionData* clientSessionData =
                 static_cast<SessionContextData*>(lws_wsi_user(it->second))->data;
 
@@ -312,9 +263,51 @@ static bool RouteMessageToClient(lws* wsi, MessageBuffer* message)
 
             lws_callback_on_writable(it->second);
         } else
-            lwsl_err("Fail find client by transaction and session_id.\n");
-    } else
-        lwsl_err("Fail find client by transaction or session_id.\n");
+            lwsl_err("Fail find client by session_id %llu \n", sessionId);
+    } else {
+        // mayibe it's session create request reply
+        const std::string messageTransaction =
+            ExtractTransaction(jsonMessagePtr);
+
+        auto it =
+            !messageTransaction.empty() ?
+                cd->createSessionTransactions.find(messageTransaction) :
+                cd->createSessionTransactions.end();
+
+        if(it != cd->createSessionTransactions.end()) {
+            SenderTransaction& clientTransaction = it->second;
+
+            SessionContextData* clientSessionContextData =
+                static_cast<SessionContextData*>(lws_wsi_user(clientTransaction.sender));
+            ClientSessionData* clientSessionData =
+                static_cast<ClientSessionData*>(clientSessionContextData->data);
+            if(!clientSessionData->createSessionTransaction.empty()) {
+                if(clientSessionData->createSessionTransaction == clientTransaction.transaction) {
+                    json_int_t newSessionId = ExtractNewSessionId(jsonMessagePtr);
+                    lwsl_notice("Client session_id received: %llu\n, ", newSessionId);
+                    clientSessionData->createSessionTransaction.clear();
+                    clientSessionData->sessionId = newSessionId;
+
+                    cd->sessions.emplace(clientSessionData->sessionId, clientTransaction.sender);
+                } else {
+                    // it should be create session reply, but it seems it's not
+                    assert(false);
+                }
+            }
+
+            JsonPtr jsonTransaction(json_string(clientTransaction.transaction.c_str()));
+            json_object_set(jsonMessage, "transaction", jsonTransaction.get());
+
+            SerializeMessage(jsonMessage, message);
+
+            clientSessionData->sendMessages.emplace_back(std::move(*message));
+
+            lws_callback_on_writable(clientTransaction.sender);
+
+            cd->createSessionTransactions.erase(it);
+        } else
+            lwsl_err("Fail find client by create session transaction.\n");
+    }
 
     return true;
 }
@@ -563,7 +556,7 @@ static int WsCallback(
         case LWS_CALLBACK_CLOSED:
             if(serviceConnection) {
                 cd->service = nullptr;
-                cd->transactions.clear();
+                cd->createSessionTransactions.clear();
                 cd->sessions.clear();
 
                 // client will disconnect when will know about service disconnect on wakeup
