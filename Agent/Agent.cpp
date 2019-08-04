@@ -249,14 +249,14 @@ static int WsCallback(
         case LWS_CALLBACK_CLIENT_CONNECTION_ERROR: {
             if(isServiceConnection && cd->proxyConnection) {
                 if(in)
-                    lwsl_notice("Service connection failed. %s\n", in);
+                    lwsl_notice("Service connection failed. %s\n", static_cast<const char*>(in));
                 else
                     lwsl_notice("Service connection failed\n");
 
                 lws_callback_on_writable(cd->proxyConnection);
             } else if(!isServiceConnection && cd->serviceConnection) {
                 if(in)
-                    lwsl_notice("Proxy connection failed. %s\n", in);
+                    lwsl_notice("Proxy connection failed. %s\n", static_cast<const char*>(in));
                 else
                     lwsl_notice("Proxy connection failed\n");
 
