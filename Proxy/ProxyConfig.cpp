@@ -52,6 +52,26 @@ bool LoadConfig(ProxyConfig* outConfig)
             }
         }
 
+        config_setting_t* httpConfig = config_lookup(&config, "http");
+        if(serverConfig && CONFIG_TRUE == config_setting_is_group(httpConfig)) {
+            int httpPort = 0;
+            if(CONFIG_TRUE == config_setting_lookup_int(httpConfig, "port", &httpPort)) {
+                loadedConfig.httpPort = static_cast<unsigned short>(httpPort);
+            }
+            int httpsPort = 0;
+            if(CONFIG_TRUE == config_setting_lookup_int(httpConfig, "secure_port", &httpsPort)) {
+                loadedConfig.httpsPort = static_cast<unsigned short>(httpsPort);
+            }
+            const char* root = nullptr;
+            if(CONFIG_TRUE == config_setting_lookup_string(httpConfig, "root", &root)) {
+                loadedConfig.httpRoot = FullPath(configDir, root);
+            }
+            const char* index = nullptr;
+            if(CONFIG_TRUE == config_setting_lookup_string(httpConfig, "index", &index)) {
+                loadedConfig.httpIndex = index;
+            }
+        }
+
         config_setting_t* proxyConfig = config_lookup(&config, "proxy");
         if(proxyConfig && CONFIG_TRUE == config_setting_is_group(proxyConfig)) {
             int wsPort = 0;
@@ -78,6 +98,23 @@ bool LoadConfig(ProxyConfig* outConfig)
     if(loadedConfig.serverName.empty()) {
         lwsl_err("Missing server name\n");
         success = false;
+    }
+
+    if(!loadedConfig.httpRoot.empty() || !loadedConfig.httpIndex.empty() ||
+       0 != loadedConfig.httpPort || 0 != loadedConfig.httpsPort)
+    {
+        if(loadedConfig.httpRoot.empty()) {
+            lwsl_err("Missing http root dir\n");
+            success = false;
+        }
+        if(loadedConfig.httpIndex.empty()) {
+            lwsl_err("Missing http index file name\n");
+            success = false;
+        }
+        if(0 == loadedConfig.httpPort && 0 == loadedConfig.httpsPort) {
+            lwsl_err("Missing http or https port\n");
+            success = false;
+        }
     }
 
     if(!loadedConfig.port) {

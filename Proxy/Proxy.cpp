@@ -646,6 +646,40 @@ bool Proxy()
 
     const ProxyConfig& config = contextData.config;
 
+    lws_http_mount mount = {};
+    if(!config.httpRoot.empty() && !config.httpIndex.empty()) {
+        mount.mountpoint = "/";
+        mount.mountpoint_len = 1;
+        mount.origin = config.httpRoot.c_str();
+        mount.def = config.httpIndex.c_str();
+        mount.origin_protocol = LWSMPRO_FILE;
+
+        if(config.httpPort > 0) {
+            lws_context_creation_info httpVhostInfo {};
+            httpVhostInfo.port = config.httpPort;
+            httpVhostInfo.vhost_name = config.serverName.c_str();
+            httpVhostInfo.mounts = &mount;
+
+            lws_vhost* httpVhost = lws_create_vhost(context, &httpVhostInfo);
+            if(!httpVhost)
+                return false;
+        }
+
+        if(config.httpsPort > 0) {
+            lws_context_creation_info httpsVhostInfo {};
+            httpsVhostInfo.port = config.httpsPort;
+            httpsVhostInfo.vhost_name = config.serverName.c_str();
+            httpsVhostInfo.mounts = &mount;
+            httpsVhostInfo.ssl_cert_filepath = config.certificate.c_str();
+            httpsVhostInfo.ssl_private_key_filepath = config.key.c_str();
+            httpsVhostInfo.options = LWS_SERVER_OPTION_DO_SSL_GLOBAL_INIT;
+
+            lws_vhost* httpsVhost = lws_create_vhost(context, &httpsVhostInfo);
+            if(!httpsVhost)
+                return false;
+        }
+    }
+
     lws_context_creation_info vhostInfo {};
     vhostInfo.port = config.port;
     vhostInfo.protocols = protocols;
