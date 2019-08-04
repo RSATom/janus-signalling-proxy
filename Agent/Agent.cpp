@@ -287,7 +287,7 @@ static int WsCallback(
     return 0;
 }
 
-void Agent()
+bool Agent()
 {
     const lws_protocols serviceProtocols[] = {
         {
@@ -316,7 +316,7 @@ void Agent()
 
     if(!LoadConfig(&contextData.config)) {
         lwsl_err("Fail load config file.\n");
-        return;
+        return false;
     }
 
     lws_context_creation_info wsInfo {};
@@ -329,7 +329,7 @@ void Agent()
     LwsContextPtr contextPtr(lws_create_context(&wsInfo));
     lws_context* context = contextPtr.get();
     if(!context)
-        return;
+        return false;
 
     lws_context_creation_info serviceVhostInfo {};
     serviceVhostInfo.gid = -1;
@@ -339,7 +339,7 @@ void Agent()
 
     lws_vhost* serviceVhost = lws_create_vhost(context, &serviceVhostInfo);
     if(!serviceVhost)
-         return;
+         return false;
 
     lws_context_creation_info proxyVhostInfo {};
     proxyVhostInfo.gid = -1;
@@ -352,7 +352,7 @@ void Agent()
 
     lws_vhost* proxyVhost = lws_create_vhost(context, &proxyVhostInfo);
     if(!proxyVhost)
-         return;
+         return false;
 
     time_t serviceDisconnectedTime = 1; // =1 to emulate timeout on startup
     time_t proxyDisconnectedTime = 1;
@@ -380,4 +380,6 @@ void Agent()
             }
         }
     }
+
+    return true;
 }

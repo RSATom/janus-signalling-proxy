@@ -3,7 +3,5 @@
 
 int main(int , char*[])
 {
-    Proxy();
-
-    return 0;
+    return Proxy() ? 0 : -1;
 }

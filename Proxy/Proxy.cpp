@@ -584,7 +584,7 @@ static int WsCallback(
     return 0;
 }
 
-void Proxy()
+bool Proxy()
 {
     const lws_protocols protocols[] = {
         { "http", HTTPCallback, 0, 0 },
@@ -625,12 +625,12 @@ void Proxy()
 
     if(!LoadConfig(&contextData.config)) {
         lwsl_err("Fail load config file.\n");
-        return;
+        return false;
     }
 
     if(!LoadAuthCertificate(&contextData)) {
         lwsl_err("Fail load auth certificate.\n");
-        return;
+        return false;
     }
 
     lws_context_creation_info wsInfo {};
@@ -642,7 +642,7 @@ void Proxy()
     LwsContextPtr contextPtr(lws_create_context(&wsInfo));
     lws_context* context = contextPtr.get();
     if(!context)
-        return;
+        return false;
 
     lws_context_creation_info vhostInfo {};
     vhostInfo.port = contextData.config.port;
@@ -651,7 +651,7 @@ void Proxy()
 
     lws_vhost* vhost = lws_create_vhost(context, &vhostInfo);
     if(!vhost)
-         return;
+         return false;
 
     lws_context_creation_info secureVhostInfo {};
     secureVhostInfo.port = contextData.config.securePort;
@@ -666,7 +666,9 @@ void Proxy()
 
     lws_vhost* secureVhost = lws_create_vhost(context, &secureVhostInfo);
     if(!secureVhost)
-         return;
+         return false;
 
     while(lws_service(context, 50) >= 0);
+
+    return true;
 }

@@ -3,7 +3,5 @@
 
 int main(int , char*[])
 {
-    Agent();
-
-    return 0;
+    return Agent() ? 0 : -1;
 }
