@@ -27,7 +27,7 @@ bool LoadConfig(ProxyConfig* outConfig)
         config_init(&config);
         ConfigDestroy ConfigDestroy(&config);
 
-        lwsl_notice("Trying load config: %s\n", configFile.c_str());
+        lwsl_notice("Loading config: %s\n", configFile.c_str());
         if(!config_read_file(&config, configFile.c_str())) {
             lwsl_err("Fail load config. %s. %s:%d\n",
                 config_error_text(&config),
@@ -36,12 +36,24 @@ bool LoadConfig(ProxyConfig* outConfig)
             return false;
         }
 
+        config_setting_t* serverConfig = config_lookup(&config, "server");
+        if(serverConfig && CONFIG_TRUE == config_setting_is_group(serverConfig)) {
+            const char* serverName = nullptr;
+            if(CONFIG_TRUE == config_setting_lookup_string(serverConfig, "name", &serverName)) {
+                loadedConfig.serverName = serverName;
+            }
+            const char* certificate = nullptr;
+            if(CONFIG_TRUE == config_setting_lookup_string(serverConfig, "certificate", &certificate)) {
+                loadedConfig.certificate = FullPath(configDir, certificate);
+            }
+            const char* key = nullptr;
+            if(CONFIG_TRUE == config_setting_lookup_string(serverConfig, "key", &key)) {
+                loadedConfig.key = FullPath(configDir, key);
+            }
+        }
+
         config_setting_t* proxyConfig = config_lookup(&config, "proxy");
         if(proxyConfig && CONFIG_TRUE == config_setting_is_group(proxyConfig)) {
-            const char* hostname = nullptr;
-            if(CONFIG_TRUE == config_setting_lookup_string(proxyConfig, "hostname", &hostname)) {
-                loadedConfig.hostname = hostname;
-            }
             int wsPort = 0;
             if(CONFIG_TRUE == config_setting_lookup_int(proxyConfig, "ws_port", &wsPort)) {
                 loadedConfig.port = static_cast<unsigned short>(wsPort);
@@ -49,14 +61,6 @@ bool LoadConfig(ProxyConfig* outConfig)
             int wssPort = 0;
             if(CONFIG_TRUE == config_setting_lookup_int(proxyConfig, "wss_port", &wssPort)) {
                 loadedConfig.securePort = static_cast<unsigned short>(wssPort);
-            }
-            const char* certificate = nullptr;
-            if(CONFIG_TRUE == config_setting_lookup_string(proxyConfig, "certificate", &certificate)) {
-                loadedConfig.certificate = FullPath(configDir, certificate);
-            }
-            const char* key = nullptr;
-            if(CONFIG_TRUE == config_setting_lookup_string(proxyConfig, "key", &key)) {
-                loadedConfig.key = FullPath(configDir, key);
             }
         }
 
@@ -71,8 +75,8 @@ bool LoadConfig(ProxyConfig* outConfig)
 
     bool success = true;
 
-    if(loadedConfig.hostname.empty()) {
-        lwsl_err("Missing hostname\n");
+    if(loadedConfig.serverName.empty()) {
+        lwsl_err("Missing server name\n");
         success = false;
     }
 

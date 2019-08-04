@@ -644,21 +644,23 @@ bool Proxy()
     if(!context)
         return false;
 
+    const ProxyConfig& config = contextData.config;
+
     lws_context_creation_info vhostInfo {};
-    vhostInfo.port = contextData.config.port;
+    vhostInfo.port = config.port;
     vhostInfo.protocols = protocols;
-    vhostInfo.vhost_name = contextData.config.hostname.c_str();
+    vhostInfo.vhost_name = config.serverName.c_str();
 
     lws_vhost* vhost = lws_create_vhost(context, &vhostInfo);
     if(!vhost)
          return false;
 
     lws_context_creation_info secureVhostInfo {};
-    secureVhostInfo.port = contextData.config.securePort;
+    secureVhostInfo.port = config.securePort;
     secureVhostInfo.protocols = secureProtocols;
-    secureVhostInfo.ssl_cert_filepath = contextData.config.certificate.c_str();
-    secureVhostInfo.ssl_private_key_filepath = contextData.config.key.c_str();
-    secureVhostInfo.vhost_name = contextData.config.hostname.c_str();
+    secureVhostInfo.ssl_cert_filepath = config.certificate.c_str();
+    secureVhostInfo.ssl_private_key_filepath = config.key.c_str();
+    secureVhostInfo.vhost_name = config.serverName.c_str();
     secureVhostInfo.options |= LWS_SERVER_OPTION_DO_SSL_GLOBAL_INIT;
     // secureVhostInfo.options |= LWS_SERVER_OPTION_REDIRECT_HTTP_TO_HTTPS;
     secureVhostInfo.options |= LWS_SERVER_OPTION_REQUIRE_VALID_OPENSSL_CLIENT_CERT;
