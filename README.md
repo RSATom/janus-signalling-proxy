@@ -1,4 +1,5 @@
-[![Snap Status](https://build.snapcraft.io/badge/RSATom/janus-signalling-proxy.svg)](https://build.snapcraft.io/user/RSATom/janus-signalling-proxy)
+[![Proxy Snap Status](https://build.snapcraft.io/badge/RSATom/janus-signalling-proxy-snap.svg)](https://build.snapcraft.io/user/RSATom/janus-signalling-proxy-snap)
+[![Agent Snap Status](https://build.snapcraft.io/badge/RSATom/janus-signalling-proxy-agent-snap.svg)](https://build.snapcraft.io/user/RSATom/janus-signalling-proxy-agent-snap)
 # janus-signalling-proxy
 Intended to proxy WebSockets transport messages to Janus WebRTC Server instance behind NAT.
 
