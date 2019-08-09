@@ -1,6 +1,5 @@
 Proxy:  
-[![Proxy Snap Status](https://build.snapcraft.io/badge/RSATom/janus-signalling-proxy-snap.svg)](https://build.snapcraft.io/user/RSATom/janus-signalling-proxy-snap)
-  
+[![Proxy Snap Status](https://build.snapcraft.io/badge/RSATom/janus-signalling-proxy-snap.svg)](https://build.snapcraft.io/user/RSATom/janus-signalling-proxy-snap)  
 Agent:  
 [![Agent Snap Status](https://build.snapcraft.io/badge/RSATom/janus-signalling-proxy-agent-snap.svg)](https://build.snapcraft.io/user/RSATom/janus-signalling-proxy-agent-snap)
 # janus-signalling-proxy
